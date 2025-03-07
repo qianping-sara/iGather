@@ -1,4 +1,4 @@
-import Phaser from 'phaser';
+import * as Phaser from 'phaser';
 import { useSceneStore } from '../../store/sceneStore';
 import { useAvatarStore } from '../../store/avatarStore';
 
@@ -29,6 +29,10 @@ export default class PreloadScene extends Phaser.Scene {
       this.handleErrors();
       this.createProgressBar();
 
+      // 加载地图资源
+      this.load.image('pirate_tileset', 'assets/maps/tilemap_packed.png');
+      this.load.tilemapTiledJSON('pirate_map', 'assets/maps/pirate_map.json');
+      
       // 直接创建默认纹理
       console.log('PreloadScene: 创建默认纹理');
       this.createDefaultTextures();

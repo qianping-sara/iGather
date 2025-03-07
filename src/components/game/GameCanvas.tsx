@@ -4,14 +4,14 @@ import { useEffect, useRef } from 'react';
 import { useAvatarStore } from '../../store/avatarStore';
 import { useSceneStore } from '../../store/sceneStore';
 import { gameConfig } from '../../game/config';
-import type Phaser from 'phaser';
+import type * as PhaserType from 'phaser';
 
 interface GameCanvasProps {
   className?: string;
 }
 
 const GameCanvas = ({ className }: GameCanvasProps) => {
-  const gameRef = useRef<Phaser.Game | null>(null);
+  const gameRef = useRef<PhaserType.Game | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const { selectedAvatar } = useAvatarStore();
   const { selectedScene } = useSceneStore();

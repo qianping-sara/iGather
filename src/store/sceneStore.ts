@@ -21,13 +21,6 @@ export const useSceneStore = create<SceneState>((set) => ({
       description: '一个宁静祥和的小镇场景',
       image: '/assets/scenes/town.svg', 
       mapKey: 'map'
-    },
-    {
-      id: 'city',
-      name: 'Pico-8城市',
-      description: '一个复古风格的像素城市',
-      image: '/assets/scenes/city.svg',
-      mapKey: 'city-map'
     }
   ],
   setSelectedScene: (scene) => set({ selectedScene: scene }),

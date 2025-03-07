@@ -4,7 +4,6 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
 import { useAvatarStore } from '../../store/avatarStore';
-import { useSceneStore } from '../../store/sceneStore';
 
 // 使用dynamic导入，并禁用SSR
 const GameCanvas = dynamic(
@@ -66,14 +65,13 @@ function SimpleErrorBoundary({ children }: { children: React.ReactNode }) {
 
 export default function World(): React.ReactNode {
   const { selectedAvatar } = useAvatarStore();
-  const { selectedScene } = useSceneStore();
   const [showChat, setShowChat] = useState(true);
   const [showDebug, setShowDebug] = useState(true); // 默认显示调试面板
   const [debugLog, setDebugLog] = useState<string[]>([]);
   const [gameError, setGameError] = useState<string | null>(null);
   
   // 更新当前场景名称显示
-  const sceneName = selectedScene === 'city' ? 'Pico-8城市' : '小镇场景';
+  const sceneName = '小镇场景';
   
   // 拦截控制台日志用于调试
   useEffect(() => {
