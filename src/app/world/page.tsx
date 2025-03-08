@@ -66,7 +66,7 @@ function SimpleErrorBoundary({ children }: { children: React.ReactNode }) {
 export default function World(): React.ReactNode {
   const { selectedAvatar } = useAvatarStore();
   const [showChat, setShowChat] = useState(true);
-  const [showDebug, setShowDebug] = useState(true); // 默认显示调试面板
+  const [showDebug, setShowDebug] = useState(false); // 默认隐藏调试面板
   const [debugLog, setDebugLog] = useState<string[]>([]);
   const [gameError, setGameError] = useState<string | null>(null);
   

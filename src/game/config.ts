@@ -5,7 +5,7 @@ const isDevelopment = typeof window !== 'undefined' &&
 // 导出一个配置对象，但不导入Phaser，避免服务器端渲染问题
 export const gameConfig = {
   type: 'AUTO',  // Phaser.AUTO的字符串表示
-  width: 800,
+  width: 960,
   height: 600,
   parent: 'game-container',
   backgroundColor: '#333333',
@@ -13,7 +13,7 @@ export const gameConfig = {
   scale: {
     mode: 'RESIZE',
     autoCenter: 'CENTER_BOTH',
-    width: 800,
+    width: 960,
     height: 600,
     min: {
       width: 400,

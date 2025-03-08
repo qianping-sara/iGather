@@ -31,7 +31,8 @@ export default class PreloadScene extends Phaser.Scene {
 
       // 加载地图资源
       this.load.image('pirate_tileset', 'assets/maps/tilemap_packed.png');
-      this.load.tilemapTiledJSON('pirate_map', 'assets/maps/pirate_map.json');
+      this.load.image('tilemap_packed', 'assets/maps/kenney_monochrome-pirates/Default/Tilemap/tilemap_packed.png');
+      this.load.tilemapTiledJSON('pirate_map', 'assets/maps/sample-overworld.json');
       
       // 直接创建默认纹理
       console.log('PreloadScene: 创建默认纹理');

@@ -39,12 +39,48 @@ export default class GameScene extends Phaser.Scene implements GameSceneData {
       
       // 创建玩家
       console.log('GameScene: 创建玩家');
-      const spawnPoint = this.map?.getObjectLayer('Objects')?.objects.find((obj: Phaser.Types.Tilemaps.TiledObject) => obj.name === 'Spawn Point');
+      
+      // 尝试从对象层获取出生点，如果不存在则使用默认位置
+      let spawnPoint = null;
+      try {
+        spawnPoint = this.map?.getObjectLayer('Objects')?.objects.find(
+          (obj: Phaser.Types.Tilemaps.TiledObject) => obj.name === 'Spawn Point'
+        );
+      } catch (e) {
+        console.log('GameScene: 无法找到对象层或出生点:', e);
+      }
+      
+      // 计算玩家的初始位置，考虑地图偏移
+      let playerX = spawnPoint ? spawnPoint.x : this.cameras.main.width / 2;
+      let playerY = spawnPoint ? spawnPoint.y : this.cameras.main.height / 2;
+      
+      // 如果地图有偏移，则将偏移应用到玩家位置
+      if (this.groundLayer) {
+        // 获取地图位置
+        const layerX = this.groundLayer.x;
+        const layerY = this.groundLayer.y;
+        
+        if (spawnPoint) {
+          // 如果有出生点，使用出生点位置
+          playerX = layerX + spawnPoint.x;
+          playerY = layerY + spawnPoint.y;
+          console.log(`GameScene: 玩家初始位置设置为出生点 (${playerX}, ${playerY})`);
+        } else {
+          // 如果没有出生点，将玩家放在地图中心
+          const mapWidth = this.map?.widthInPixels || 0;
+          const mapHeight = this.map?.heightInPixels || 0;
+          playerX = layerX + mapWidth / 2;
+          playerY = layerY + mapHeight / 2;
+          console.log(`GameScene: 玩家初始位置设置为地图中心 (${playerX}, ${playerY})`);
+        }
+      } else {
+        console.log(`GameScene: 玩家初始位置设置为 (${playerX}, ${playerY})，无地图偏移`);
+      }
       
       this.player = new Player(
         this,
-        spawnPoint ? spawnPoint.x : 400,
-        spawnPoint ? spawnPoint.y : 300,
+        playerX,
+        playerY,
         'jelly'
       );
       
@@ -74,7 +110,7 @@ export default class GameScene extends Phaser.Scene implements GameSceneData {
       }
       
       // 添加图块集
-      const tileset = this.map.addTilesetImage('pirate_tileset', 'pirate_tileset');
+      const tileset = this.map.addTilesetImage('tilemap_packed', 'tilemap_packed');
       console.log('GameScene: 图块集添加结果', tileset);
       
       if (!tileset) {
@@ -82,11 +118,28 @@ export default class GameScene extends Phaser.Scene implements GameSceneData {
       }
       
       // 创建图层
-      this.groundLayer = this.map.createLayer('Ground', tileset, 0, 0);
-      console.log('GameScene: 地面图层创建成功', this.groundLayer);
+      // 计算图层的偏移量，使地图居中
+      const gameWidth = this.cameras.main.width;
+      const gameHeight = this.cameras.main.height;
+      const mapWidth = this.map.widthInPixels;
+      const mapHeight = this.map.heightInPixels;
       
-      this.obstaclesLayer = this.map.createLayer('Obstacles', tileset, 0, 0);
-      console.log('GameScene: 障碍物图层创建成功', this.obstaclesLayer);
+      console.log(`GameScene: 游戏视口尺寸 ${gameWidth}x${gameHeight}, 地图尺寸 ${mapWidth}x${mapHeight}`);
+      
+      // 计算偏移量，确保地图居中
+      const offsetX = Math.floor((gameWidth - mapWidth) / 2);
+      const offsetY = Math.floor((gameHeight - mapHeight) / 2);
+      
+      console.log(`GameScene: 计算 - 游戏视口: ${gameWidth}x${gameHeight}, 地图: ${mapWidth}x${mapHeight}`);
+      console.log(`GameScene: 应用地图偏移 X:${offsetX}, Y:${offsetY}`);
+      
+      // 创建图层 - 直接在创建时设置正确的位置
+      this.groundLayer = this.map.createLayer('Terrain', tileset, offsetX, offsetY);
+      this.obstaclesLayer = this.map.createLayer('Objects A', tileset, offsetX, offsetY);
+      
+      console.log('GameScene: 图层创建成功，将使用相机缩放');
+      
+      // 不在这里设置图层缩放，而是在setupCamera中设置相机缩放
       
       // 设置碰撞 - 使用更安全的方式
       try {
@@ -95,7 +148,7 @@ export default class GameScene extends Phaser.Scene implements GameSceneData {
           
           // 检查图层是否为空
           const isEmpty = this.obstaclesLayer.tilemap.layers.find(
-            (layer: Phaser.Tilemaps.LayerData) => layer.name === 'Obstacles'
+            (layer: Phaser.Tilemaps.LayerData) => layer.name === 'Objects A'
           )?.data.every(
             (row: Phaser.Tilemaps.Tile[]) => row.every(
               (tile: Phaser.Tilemaps.Tile) => tile.index === -1
@@ -140,13 +193,26 @@ export default class GameScene extends Phaser.Scene implements GameSceneData {
       
       // 设置世界边界
       try {
-        if (this.map) {
+        if (this.map && this.groundLayer) {
           console.log('GameScene: 开始设置世界边界');
+          
+          // 获取地图尺寸和位置
           const mapWidth = this.map.widthInPixels;
           const mapHeight = this.map.heightInPixels;
-          console.log(`GameScene: 地图尺寸 ${mapWidth}x${mapHeight}`);
+          const layerX = this.groundLayer.x;
+          const layerY = this.groundLayer.y;
+          
+          // 设置物理世界边界为地图的实际位置和尺寸
+          this.physics.world.setBounds(layerX, layerY, mapWidth, mapHeight);
+          
+          // 确保物理世界边界设置正确
+          const bounds = this.physics.world.bounds;
+          console.log(`GameScene: 世界边界设置为 x:${bounds.x}, y:${bounds.y}, width:${bounds.width}, height:${bounds.height}`);
+        } else if (this.map) {
+          const mapWidth = this.map.widthInPixels;
+          const mapHeight = this.map.heightInPixels;
           this.physics.world.setBounds(0, 0, mapWidth, mapHeight);
-          console.log('GameScene: 世界边界设置完成');
+          console.log(`GameScene: 世界边界设置为默认值 0,0,${mapWidth},${mapHeight}`);
         }
       } catch (boundsError) {
         console.error('GameScene: 设置世界边界时发生错误:', boundsError);
@@ -263,11 +329,29 @@ export default class GameScene extends Phaser.Scene implements GameSceneData {
   // 设置相机
   private setupCamera(): void {
     try {
-      if (this.map) {
+      if (this.map && this.groundLayer) {
+        // 设置缩放因子
+        const scaleFactor = 3.0; // 放大3倍
+        
+        // 获取地图尺寸和位置
         const mapWidth = this.map.widthInPixels;
         const mapHeight = this.map.heightInPixels;
-        this.cameras.main.setBounds(0, 0, mapWidth, mapHeight);
-        this.cameras.main.setScroll(mapWidth / 2 - 400, mapHeight / 2 - 300);
+        const layerX = this.groundLayer.x;
+        const layerY = this.groundLayer.y;
+        
+        // 设置相机边界为地图的实际位置和尺寸
+        this.cameras.main.setBounds(layerX, layerY, mapWidth, mapHeight);
+        
+        // 将相机定位到地图中心
+        const centerX = layerX + mapWidth / 2;
+        const centerY = layerY + mapHeight / 2;
+        this.cameras.main.centerOn(centerX, centerY);
+        
+        // 设置相机缩放
+        this.cameras.main.setZoom(scaleFactor);
+        
+        console.log(`GameScene: 相机设置为 bounds(${layerX}, ${layerY}, ${mapWidth}, ${mapHeight}), 缩放: ${scaleFactor}`);
+        console.log(`GameScene: 相机中心点设置为 (${centerX}, ${centerY})`);
       } else {
         // 如果使用备用地图，则设置相机到屏幕中心
         const width = this.cameras.main.width;
