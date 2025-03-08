@@ -4,9 +4,10 @@ import Link from 'next/link';
 import { useState, useEffect } from 'react';
 import { useAvatarStore } from '../store/avatarStore';
 import { useSceneStore } from '../store/sceneStore';
+import { useUserStore } from '../store/userStore';
 
 export default function Home() {
-  const [userName, setUserName] = useState('');
+  const { userName, setUserName } = useUserStore();
   const { availableAvatars, selectedAvatar, setSelectedAvatar } = useAvatarStore();
   const { setSelectedScene } = useSceneStore();
   
@@ -144,7 +145,16 @@ export default function Home() {
                 ? 'bg-blue-600 hover:bg-blue-700 text-white' 
                 : 'bg-gray-500 cursor-not-allowed text-white'
             }`}
-            onClick={(e) => (!userName.trim() || !selectedAvatar) && e.preventDefault()}
+            onClick={(e) => {
+              if (!userName.trim() || !selectedAvatar) {
+                e.preventDefault();
+              } else {
+                // 确保用户名不为空
+                if (!userName.trim()) {
+                  setUserName('玩家');
+                }
+              }
+            }}
           >
             进入Haiven小镇
           </Link>

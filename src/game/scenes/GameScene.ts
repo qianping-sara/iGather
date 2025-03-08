@@ -1,5 +1,7 @@
 import * as Phaser from 'phaser';
 import Player from '../objects/Player';
+import { useUserStore } from '../../store/userStore';
+import { useAvatarStore } from '../../store/avatarStore';
 
 interface GameSceneData {
   wallsGroup?: Phaser.Physics.Arcade.StaticGroup;
@@ -25,6 +27,11 @@ export default class GameScene extends Phaser.Scene implements GameSceneData {
   create(): void {
     try {
       console.log('GameScene: 开始创建场景');
+      
+      // 获取用户名称和头像
+      const userName = useUserStore.getState().userName || '玩家';
+      const selectedAvatar = useAvatarStore.getState().selectedAvatar || 'default';
+      console.log(`GameScene: 用户名称: ${userName}, 头像: ${selectedAvatar}`);
       
       // 添加调试文本
       this.debugText = this.add.text(10, 10, '初始化游戏场景...', {
@@ -77,11 +84,13 @@ export default class GameScene extends Phaser.Scene implements GameSceneData {
         console.log(`GameScene: 玩家初始位置设置为 (${playerX}, ${playerY})，无地图偏移`);
       }
       
+      // 创建玩家实例
       this.player = new Player(
         this,
         playerX,
         playerY,
-        'jelly'
+        selectedAvatar,
+        userName
       );
       
       // 添加物理碰撞 - 使用更安全的方式
@@ -127,8 +136,9 @@ export default class GameScene extends Phaser.Scene implements GameSceneData {
       console.log(`GameScene: 游戏视口尺寸 ${gameWidth}x${gameHeight}, 地图尺寸 ${mapWidth}x${mapHeight}`);
       
       // 计算偏移量，确保地图居中
-      const offsetX = Math.floor((gameWidth - mapWidth) / 2);
-      const offsetY = Math.floor((gameHeight - mapHeight) / 2);
+      // 使用Math.round而不是Math.floor，以避免舍入误差
+      const offsetX = Math.round((gameWidth - mapWidth) / 2);
+      const offsetY = Math.round((gameHeight - mapHeight) / 2);
       
       console.log(`GameScene: 计算 - 游戏视口: ${gameWidth}x${gameHeight}, 地图: ${mapWidth}x${mapHeight}`);
       console.log(`GameScene: 应用地图偏移 X:${offsetX}, Y:${offsetY}`);
@@ -136,6 +146,17 @@ export default class GameScene extends Phaser.Scene implements GameSceneData {
       // 创建图层 - 直接在创建时设置正确的位置
       this.groundLayer = this.map.createLayer('Terrain', tileset, offsetX, offsetY);
       this.obstaclesLayer = this.map.createLayer('Objects A', tileset, offsetX, offsetY);
+      
+      // 添加其他图层（如果存在）
+      try {
+        const objectsBLayer = this.map.createLayer('Objects B', tileset, offsetX, offsetY);
+        const objectsCLayer = this.map.createLayer('Objects C', tileset, offsetX, offsetY);
+        
+        if (objectsBLayer) console.log('GameScene: Objects B图层创建成功');
+        if (objectsCLayer) console.log('GameScene: Objects C图层创建成功');
+      } catch (e) {
+        console.log('GameScene: 创建额外图层时出错，可能不存在:', e);
+      }
       
       console.log('GameScene: 图层创建成功，将使用相机缩放');
       
@@ -300,15 +321,52 @@ export default class GameScene extends Phaser.Scene implements GameSceneData {
   // 设置碰撞
   private setupCollisions(): void {
     try {
+      console.log('GameScene: 开始设置碰撞');
+      
       // 与地图图层的碰撞
-      if (this.groundLayer) {
-        console.log('GameScene: 添加玩家与地面图层的碰撞');
-        this.physics.add.collider(this.player, this.groundLayer);
+      if (this.obstaclesLayer && this.player) {
+        console.log('GameScene: 添加玩家与障碍物图层的碰撞');
+        
+        // 使用自定义碰撞处理，考虑玩家的边缘
+        this.physics.add.collider(
+          this.player, 
+          this.obstaclesLayer,
+          undefined,
+          (player: Phaser.Types.Physics.Arcade.GameObjectWithBody, tile: Phaser.Types.Physics.Arcade.GameObjectWithBody) => {
+            // 获取玩家的边界
+            const playerBounds = player.getBounds();
+            
+            // 获取瓦片的边界
+            const tileBounds = new Phaser.Geom.Rectangle(
+              tile.x, 
+              tile.y, 
+              tile.width, 
+              tile.height
+            );
+            
+            // 检查是否有重叠
+            const overlap = Phaser.Geom.Rectangle.Overlaps(playerBounds, tileBounds);
+            
+            // 如果有重叠，则返回true表示发生碰撞
+            return overlap;
+          },
+          this
+        );
+        
+        // 设置碰撞回调，用于调试
+        this.physics.world.on('collide', (gameObject1: Phaser.GameObjects.GameObject, gameObject2: Phaser.GameObjects.GameObject) => {
+          if (gameObject1 === this.player || gameObject2 === this.player) {
+            // 玩家碰撞事件
+            console.log('GameScene: 玩家发生碰撞');
+          }
+        });
       }
       
-      if (this.obstaclesLayer) {
-        console.log('GameScene: 添加玩家与障碍物图层的碰撞');
-        this.physics.add.collider(this.player, this.obstaclesLayer);
+      // 与地面图层的碰撞
+      if (this.groundLayer && this.player) {
+        console.log('GameScene: 添加玩家与地面图层的碰撞');
+        // 只与边界碰撞
+        this.physics.add.collider(this.player, this.groundLayer);
       }
       
       // 与备用地图墙壁的碰撞
@@ -330,8 +388,8 @@ export default class GameScene extends Phaser.Scene implements GameSceneData {
   private setupCamera(): void {
     try {
       if (this.map && this.groundLayer) {
-        // 设置缩放因子
-        const scaleFactor = 3.0; // 放大3倍
+        // 设置缩放因子 - 降低一点以确保地图完整显示
+        const scaleFactor = 3.0;
         
         // 获取地图尺寸和位置
         const mapWidth = this.map.widthInPixels;
@@ -339,19 +397,55 @@ export default class GameScene extends Phaser.Scene implements GameSceneData {
         const layerX = this.groundLayer.x;
         const layerY = this.groundLayer.y;
         
-        // 设置相机边界为地图的实际位置和尺寸
-        this.cameras.main.setBounds(layerX, layerY, mapWidth, mapHeight);
+        // 计算游戏视口尺寸
+        const gameWidth = this.cameras.main.width;
+        const gameHeight = this.cameras.main.height;
         
-        // 将相机定位到地图中心
-        const centerX = layerX + mapWidth / 2;
-        const centerY = layerY + mapHeight / 2;
-        this.cameras.main.centerOn(centerX, centerY);
+        // 计算缩放后的地图尺寸
+        const scaledMapWidth = mapWidth * scaleFactor;
+        const scaledMapHeight = mapHeight * scaleFactor;
         
-        // 设置相机缩放
-        this.cameras.main.setZoom(scaleFactor);
-        
-        console.log(`GameScene: 相机设置为 bounds(${layerX}, ${layerY}, ${mapWidth}, ${mapHeight}), 缩放: ${scaleFactor}`);
-        console.log(`GameScene: 相机中心点设置为 (${centerX}, ${centerY})`);
+        // 检查地图是否超出视口
+        if (scaledMapWidth > gameWidth || scaledMapHeight > gameHeight) {
+          // 如果超出，调整缩放因子以适应视口
+          const widthRatio = gameWidth / mapWidth;
+          const heightRatio = gameHeight / mapHeight;
+          const adjustedScaleFactor = Math.min(widthRatio, heightRatio) * 0.9; // 留出10%的边距
+          
+          console.log(`GameScene: 地图太大，调整缩放因子从 ${scaleFactor} 到 ${adjustedScaleFactor}`);
+          
+          // 使用调整后的缩放因子
+          this.cameras.main.setZoom(adjustedScaleFactor);
+          
+          // 重新计算缩放后的尺寸
+          const newScaledMapWidth = mapWidth * adjustedScaleFactor;
+          const newScaledMapHeight = mapHeight * adjustedScaleFactor;
+          
+          // 计算新的偏移量，确保地图居中
+          const newOffsetX = (gameWidth - newScaledMapWidth) / 2;
+          const newOffsetY = (gameHeight - newScaledMapHeight) / 2;
+          
+          // 设置相机边界
+          this.cameras.main.setBounds(layerX - newOffsetX/adjustedScaleFactor, layerY - newOffsetY/adjustedScaleFactor, 
+                                     mapWidth + newOffsetX*2/adjustedScaleFactor, mapHeight + newOffsetY*2/adjustedScaleFactor);
+          
+          console.log(`GameScene: 相机设置为调整后的边界，缩放: ${adjustedScaleFactor}`);
+        } else {
+          // 如果不超出，使用原始设置
+          // 设置相机边界为地图的实际位置和尺寸
+          this.cameras.main.setBounds(layerX, layerY, mapWidth, mapHeight);
+          
+          // 将相机定位到地图中心
+          const centerX = layerX + mapWidth / 2;
+          const centerY = layerY + mapHeight / 2;
+          this.cameras.main.centerOn(centerX, centerY);
+          
+          // 设置相机缩放
+          this.cameras.main.setZoom(scaleFactor);
+          
+          console.log(`GameScene: 相机设置为 bounds(${layerX}, ${layerY}, ${mapWidth}, ${mapHeight}), 缩放: ${scaleFactor}`);
+          console.log(`GameScene: 相机中心点设置为 (${centerX}, ${centerY})`);
+        }
       } else {
         // 如果使用备用地图，则设置相机到屏幕中心
         const width = this.cameras.main.width;

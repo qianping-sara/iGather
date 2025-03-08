@@ -34,6 +34,9 @@ export default class PreloadScene extends Phaser.Scene {
       this.load.image('tilemap_packed', 'assets/maps/kenney_monochrome-pirates/Default/Tilemap/tilemap_packed.png');
       this.load.tilemapTiledJSON('pirate_map', 'assets/maps/sample-overworld.json');
       
+      // 加载头像资源
+      this.loadAvatars();
+      
       // 直接创建默认纹理
       console.log('PreloadScene: 创建默认纹理');
       this.createDefaultTextures();
@@ -171,5 +174,39 @@ export default class PreloadScene extends Phaser.Scene {
       this.debugText.setText(text);
     }
     console.log(`[PreloadScene] ${text}`);
+  }
+
+  // 加载所有头像
+  private loadAvatars(): void {
+    try {
+      // 获取所有可用头像
+      const avatarStore = useAvatarStore.getState();
+      const avatars = avatarStore.availableAvatars;
+      
+      console.log(`PreloadScene: 开始加载 ${avatars.length} 个头像`);
+      
+      // 加载基本头像
+      this.load.image('default', 'assets/avatars/default.png');
+      this.load.image('business', 'assets/avatars/business.png');
+      this.load.image('casual', 'assets/avatars/casual.png');
+      this.load.image('sporty', 'assets/avatars/sporty.png');
+      
+      // 加载数字头像 (1-28)
+      for (let i = 1; i <= 28; i++) {
+        this.load.image(`avatar${i}`, `assets/avatars/${i}.png`);
+      }
+      
+      // 加载当前选择的头像
+      const selectedAvatar = avatarStore.selectedAvatar;
+      if (selectedAvatar) {
+        const avatar = avatars.find(a => a.id === selectedAvatar);
+        if (avatar) {
+          console.log(`PreloadScene: 加载选择的头像 ${selectedAvatar}: ${avatar.image}`);
+          this.load.image(selectedAvatar, avatar.image);
+        }
+      }
+    } catch (error) {
+      console.error('PreloadScene: 加载头像时发生错误:', error);
+    }
   }
 } 
