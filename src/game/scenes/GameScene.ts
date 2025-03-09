@@ -19,6 +19,11 @@ export default class GameScene extends Phaser.Scene implements GameSceneData {
   public map?: Phaser.Tilemaps.Tilemap;
   public groundLayer?: Phaser.Tilemaps.TilemapLayer;
   public obstaclesLayer?: Phaser.Tilemaps.TilemapLayer;
+  public objectsBLayer?: Phaser.Tilemaps.TilemapLayer;
+  public objectsCLayer?: Phaser.Tilemaps.TilemapLayer;
+  private playerDebugText?: Phaser.GameObjects.Text;
+  private lastEffectTime?: number;
+  private specialTileMarkers?: Array<Phaser.GameObjects.GameObject>;
   
   constructor() {
     super('GameScene');
@@ -27,6 +32,9 @@ export default class GameScene extends Phaser.Scene implements GameSceneData {
   create(): void {
     try {
       console.log('GameScene: 开始创建场景');
+      
+      // 初始化特殊对象标记数组
+      this.specialTileMarkers = [];
       
       // 获取用户名称和头像
       const userName = useUserStore.getState().userName || '玩家';
@@ -99,6 +107,12 @@ export default class GameScene extends Phaser.Scene implements GameSceneData {
       // 设置相机
       this.setupCamera();
       
+      // 记录地图中所有125、126、127、128对象的位置，但不显示红色蒙版
+      this.logSpecificTilePositions();
+      
+      // 检查和修复手动添加的125、126、127、128对象
+      this.fixManuallyAddedTiles();
+      
       this.setDebugText('游戏场景初始化完成');
     } catch (error) {
       console.error('GameScene: 创建场景时发生错误:', error);
@@ -118,6 +132,10 @@ export default class GameScene extends Phaser.Scene implements GameSceneData {
         throw new Error('地图创建失败');
       }
       
+      // 打印地图信息
+      console.log(`GameScene: 地图尺寸: ${this.map.width}x${this.map.height}, 瓦片尺寸: ${this.map.tileWidth}x${this.map.tileHeight}`);
+      console.log(`GameScene: 地图图层:`, this.map.layers.map(layer => layer.name));
+      
       // 添加图块集
       const tileset = this.map.addTilesetImage('tilemap_packed', 'tilemap_packed');
       console.log('GameScene: 图块集添加结果', tileset);
@@ -125,6 +143,9 @@ export default class GameScene extends Phaser.Scene implements GameSceneData {
       if (!tileset) {
         throw new Error('无法加载海盗主题tileset');
       }
+      
+      // 打印图块集信息
+      console.log(`GameScene: 图块集信息 - 名称: ${tileset.name}, 首个瓦片ID: ${tileset.firstgid}, 瓦片数量: ${tileset.total}`);
       
       // 创建图层
       // 计算图层的偏移量，使地图居中
@@ -152,8 +173,16 @@ export default class GameScene extends Phaser.Scene implements GameSceneData {
         const objectsBLayer = this.map.createLayer('Objects B', tileset, offsetX, offsetY);
         const objectsCLayer = this.map.createLayer('Objects C', tileset, offsetX, offsetY);
         
-        if (objectsBLayer) console.log('GameScene: Objects B图层创建成功');
-        if (objectsCLayer) console.log('GameScene: Objects C图层创建成功');
+        if (objectsBLayer) {
+          console.log('GameScene: Objects B图层创建成功');
+          // 保存为类属性以便后续使用
+          this.objectsBLayer = objectsBLayer;
+        }
+        if (objectsCLayer) {
+          console.log('GameScene: Objects C图层创建成功');
+          // 保存为类属性以便后续使用
+          this.objectsCLayer = objectsCLayer;
+        }
       } catch (e) {
         console.log('GameScene: 创建额外图层时出错，可能不存在:', e);
       }
@@ -310,6 +339,20 @@ export default class GameScene extends Phaser.Scene implements GameSceneData {
   update(): void {
     if (this.player) {
       this.player.update();
+      
+      // 主动检测与特定对象的碰撞
+      this.checkSpecificTileCollisions();
+      
+      // 直接检查玩家是否与任何瓦片重叠
+      this.checkDirectOverlap();
+      
+      // 不再显示玩家位置信息
+      if (this.playerDebugText) {
+        this.playerDebugText.setVisible(false);
+        // 完全移除这个文本对象
+        this.playerDebugText.destroy();
+        this.playerDebugText = undefined;
+      }
     }
   }
 
@@ -323,6 +366,91 @@ export default class GameScene extends Phaser.Scene implements GameSceneData {
     try {
       console.log('GameScene: 开始设置碰撞');
       
+      // 确保所有图层的所有瓦片都设置了碰撞属性，优先处理Objects C层
+      this.setAllTilesCollision(this.objectsCLayer, 'Objects C', 'high');
+      this.setAllTilesCollision(this.obstaclesLayer, 'Objects A', 'low');
+      this.setAllTilesCollision(this.objectsBLayer, 'Objects B', 'low');
+      
+      // 优先处理Objects C层的碰撞
+      if (this.objectsCLayer && this.player) {
+        console.log('GameScene: 添加玩家与Objects C图层的碰撞（优先级：高）');
+        
+        // 首先设置碰撞属性
+        const width = this.objectsCLayer.width;
+        const height = this.objectsCLayer.height;
+        
+        // 记录特殊对象的位置，以便调试
+        const specialTiles = [];
+        
+        for (let y = 0; y < height; y++) {
+          for (let x = 0; x < width; x++) {
+            const tile = this.objectsCLayer.getTileAt(x, y);
+            if (tile && tile.index > 0) {
+              // 特别关注125-128的对象
+              if (tile.index === 125 || tile.index === 126 || tile.index === 127 || tile.index === 128) {
+                console.log(`GameScene: 在Objects C图层找到特定对象 ${tile.index} 在位置 (${x}, ${y})`);
+                specialTiles.push({ x, y, index: tile.index });
+                
+                // 确保设置了碰撞属性
+                if (!tile.collides) {
+                  tile.setCollision(true);
+                  console.log(`GameScene: 为特定对象 ${tile.index} 设置碰撞属性`);
+                }
+              } else {
+                // 为其他对象也设置碰撞
+                tile.setCollision(true);
+              }
+            }
+          }
+        }
+        
+        console.log(`GameScene: Objects C图层中找到 ${specialTiles.length} 个特殊对象:`, specialTiles);
+        
+        // 添加碰撞器，使用processCallback确保碰撞检测正确
+        this.physics.add.collider(
+          this.player,
+          this.objectsCLayer,
+          (player: Phaser.GameObjects.GameObject, tile: Phaser.Tilemaps.Tile) => {
+            // 获取瓦片索引
+            const tileIndex = tile.index;
+            
+            // 检查是否是特定对象 (125, 126, 127, 128)
+            if (tileIndex === 125 || tileIndex === 126 || tileIndex === 127 || tileIndex === 128) {
+              console.log(`GameScene: 玩家碰撞到Objects C图层的特定对象 ${tileIndex}，位置: (${tile.x}, ${tile.y})`);
+              this.setDebugText(`碰撞对象C: ${tileIndex}`);
+            }
+          },
+          (player: Phaser.Types.Physics.Arcade.GameObjectWithBody, tile: Phaser.Tilemaps.Tile) => {
+            // 特别关注125-128的对象
+            if (tile.index === 125 || tile.index === 126 || tile.index === 127 || tile.index === 128) {
+              // 获取玩家的边界
+              const playerBounds = player.getBounds();
+              
+              // 获取瓦片的边界
+              const tileBounds = new Phaser.Geom.Rectangle(
+                tile.pixelX + (this.objectsCLayer?.x || 0), 
+                tile.pixelY + (this.objectsCLayer?.y || 0), 
+                tile.width, 
+                tile.height
+              );
+              
+              // 检查是否有重叠
+              const overlap = Phaser.Geom.Rectangle.Overlaps(playerBounds, tileBounds);
+              
+              if (overlap) {
+                console.log(`GameScene: 玩家与特定对象 ${tile.index} 重叠检测成功`);
+              }
+              
+              // 返回是否重叠
+              return overlap;
+            }
+            
+            // 对于非特殊对象，使用默认的碰撞检测
+            return true;
+          }
+        );
+      }
+      
       // 与地图图层的碰撞
       if (this.obstaclesLayer && this.player) {
         console.log('GameScene: 添加玩家与障碍物图层的碰撞');
@@ -331,7 +459,16 @@ export default class GameScene extends Phaser.Scene implements GameSceneData {
         this.physics.add.collider(
           this.player, 
           this.obstaclesLayer,
-          undefined,
+          (player: Phaser.GameObjects.GameObject, tile: Phaser.Tilemaps.Tile) => {
+            // 获取瓦片索引
+            const tileIndex = tile.index;
+            
+            // 检查是否是特定对象 (125, 126, 127, 128)
+            if (tileIndex === 125 || tileIndex === 126 || tileIndex === 127 || tileIndex === 128) {
+              console.log(`GameScene: 玩家碰撞到特定对象 ${tileIndex}，位置: (${tile.x}, ${tile.y})`);
+              this.setDebugText(`碰撞对象: ${tileIndex}`);
+            }
+          },
           (player: Phaser.Types.Physics.Arcade.GameObjectWithBody, tile: Phaser.Types.Physics.Arcade.GameObjectWithBody) => {
             // 获取玩家的边界
             const playerBounds = player.getBounds();
@@ -352,15 +489,68 @@ export default class GameScene extends Phaser.Scene implements GameSceneData {
           },
           this
         );
-        
-        // 设置碰撞回调，用于调试
-        this.physics.world.on('collide', (gameObject1: Phaser.GameObjects.GameObject, gameObject2: Phaser.GameObjects.GameObject) => {
-          if (gameObject1 === this.player || gameObject2 === this.player) {
-            // 玩家碰撞事件
-            console.log('GameScene: 玩家发生碰撞');
-          }
-        });
       }
+      
+      // 为Objects B图层设置碰撞
+      if (this.objectsBLayer && this.player) {
+        console.log('GameScene: 添加玩家与Objects B图层的碰撞');
+        
+        // 首先设置碰撞属性
+        const width = this.objectsBLayer.width;
+        const height = this.objectsBLayer.height;
+        
+        for (let y = 0; y < height; y++) {
+          for (let x = 0; x < width; x++) {
+            const tile = this.objectsBLayer.getTileAt(x, y);
+            if (tile && tile.index > 0) {
+              // 特别关注125-128的对象
+              if (tile.index === 125 || tile.index === 126 || tile.index === 127 || tile.index === 128) {
+                console.log(`GameScene: 在Objects B图层找到特定对象 ${tile.index} 在位置 (${x}, ${y})`);
+              }
+              tile.setCollision(true);
+            }
+          }
+        }
+        
+        // 添加碰撞器
+        this.physics.add.collider(
+          this.player,
+          this.objectsBLayer,
+          (player: Phaser.GameObjects.GameObject, tile: Phaser.Tilemaps.Tile) => {
+            // 获取瓦片索引
+            const tileIndex = tile.index;
+            
+            // 检查是否是特定对象 (125, 126, 127, 128)
+            if (tileIndex === 125 || tileIndex === 126 || tileIndex === 127 || tileIndex === 128) {
+              console.log(`GameScene: 玩家碰撞到Objects B图层的特定对象 ${tileIndex}，位置: (${tile.x}, ${tile.y})`);
+              this.setDebugText(`碰撞对象B: ${tileIndex}`);
+            }
+          }
+        );
+      }
+      
+      // 设置碰撞回调，用于调试
+      this.physics.world.on('collide', (gameObject1: Phaser.GameObjects.GameObject, gameObject2: Phaser.GameObjects.GameObject) => {
+        if (gameObject1 === this.player || gameObject2 === this.player) {
+          // 玩家碰撞事件
+          console.log('GameScene: 玩家发生碰撞');
+          
+          // 检查是否与特定对象碰撞
+          if (gameObject1 !== this.player && 'index' in gameObject1) {
+            const tileIndex = gameObject1.index;
+            if (tileIndex === 125 || tileIndex === 126 || tileIndex === 127 || tileIndex === 128) {
+              console.log(`GameScene: 玩家碰撞到特定对象 ${tileIndex}`);
+              this.setDebugText(`碰撞对象: ${tileIndex}`);
+            }
+          } else if (gameObject2 !== this.player && 'index' in gameObject2) {
+            const tileIndex = gameObject2.index;
+            if (tileIndex === 125 || tileIndex === 126 || tileIndex === 127 || tileIndex === 128) {
+              console.log(`GameScene: 玩家碰撞到特定对象 ${tileIndex}`);
+              this.setDebugText(`碰撞对象: ${tileIndex}`);
+            }
+          }
+        }
+      });
       
       // 与地面图层的碰撞
       if (this.groundLayer && this.player) {
@@ -456,5 +646,352 @@ export default class GameScene extends Phaser.Scene implements GameSceneData {
     } catch (cameraError) {
       console.error('GameScene: 设置相机时发生错误:', cameraError);
     }
+  }
+
+  // 检查与特定对象的碰撞
+  private checkSpecificTileCollisions(): void {
+    // 获取玩家的位置和边界
+    const playerBounds = this.player.getBounds();
+    
+    // 记录玩家位置，帮助调试
+    // console.log(`GameScene: 玩家当前位置 (${this.player.x}, ${this.player.y})`);
+    
+    // 检查Objects A图层中的特定对象 - 这里有127和128
+    if (this.obstaclesLayer) {
+      this.checkLayerForSpecificTiles(this.obstaclesLayer, playerBounds, 'A');
+    }
+    
+    // 检查Objects B图层中的特定对象
+    if (this.objectsBLayer) {
+      this.checkLayerForSpecificTiles(this.objectsBLayer, playerBounds, 'B');
+    }
+    
+    // 检查Objects C图层中的特定对象
+    if (this.objectsCLayer) {
+      this.checkLayerForSpecificTiles(this.objectsCLayer, playerBounds, 'C');
+    }
+  }
+  
+  // 在指定图层中检查特定对象
+  private checkLayerForSpecificTiles(layer: Phaser.Tilemaps.TilemapLayer, playerBounds: Phaser.Geom.Rectangle, layerName: string): void {
+    // 计算玩家所在的瓦片坐标范围
+    const tileWidth = layer.tilemap.tileWidth;
+    const tileHeight = layer.tilemap.tileHeight;
+    
+    // 扩大检查范围，确保能捕获到所有可能的碰撞
+    const x1 = Math.floor(playerBounds.left / tileWidth) - 1;
+    const y1 = Math.floor(playerBounds.top / tileHeight) - 1;
+    const x2 = Math.ceil(playerBounds.right / tileWidth) + 1;
+    const y2 = Math.ceil(playerBounds.bottom / tileHeight) + 1;
+    
+    // 记录检查的瓦片范围
+    // console.log(`GameScene: 检查图层 ${layerName} 中的瓦片范围 (${x1},${y1}) 到 (${x2},${y2})`);
+    
+    // 遍历玩家周围的瓦片
+    for (let y = y1; y <= y2; y++) {
+      for (let x = x1; x <= x2; x++) {
+        const tile = layer.getTileAt(x, y);
+        if (tile) {
+          // 记录找到的所有瓦片，帮助调试
+          console.log(`GameScene: 图层 ${layerName} 在位置 (${x},${y}) 找到瓦片 ${tile.index}`);
+          
+          // 检查所有非零瓦片的碰撞
+          if (tile.index > 0) {
+            // 计算瓦片的边界
+            const tileBounds = new Phaser.Geom.Rectangle(
+              tile.pixelX + layer.x,
+              tile.pixelY + layer.y,
+              tile.width,
+              tile.height
+            );
+            
+            // 检查是否与玩家碰撞
+            if (Phaser.Geom.Rectangle.Overlaps(playerBounds, tileBounds)) {
+              console.log(`GameScene: 玩家碰撞到Objects ${layerName}图层的对象 ${tile.index}，位置: (${x}, ${y})`);
+              this.setDebugText(`碰撞对象${layerName}: ${tile.index}`);
+              
+              // 特别关注127和128
+              if (tile.index === 127 || tile.index === 128) {
+                console.log(`GameScene: 玩家碰撞到特定对象 ${tile.index}！！！`);
+                this.setDebugText(`碰撞特定对象: ${tile.index}`);
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // 记录地图中所有125、126、127、128对象的位置
+  private logSpecificTilePositions(): void {
+    console.log('GameScene: 开始记录地图中所有125、126、127、128对象的位置');
+    
+    // 打印地图信息
+    if (this.map) {
+      console.log(`GameScene: 地图尺寸: ${this.map.width}x${this.map.height}, 瓦片尺寸: ${this.map.tileWidth}x${this.map.tileHeight}`);
+      console.log(`GameScene: 地图像素尺寸: ${this.map.widthInPixels}x${this.map.heightInPixels}`);
+    }
+    
+    // 清除之前的标记
+    this.clearSpecialTileMarkers();
+    
+    // 重点检查Objects C图层，因为125-128对象现在都在这一层
+    if (this.objectsCLayer) {
+      console.log('GameScene: 重点检查Objects C图层，因为125-128对象现在都在这一层');
+      this.logLayerSpecificTiles(this.objectsCLayer, 'C');
+    }
+    
+    // 也检查其他图层，以防万一
+    if (this.obstaclesLayer) {
+      this.logLayerSpecificTiles(this.obstaclesLayer, 'A');
+    }
+    
+    if (this.objectsBLayer) {
+      this.logLayerSpecificTiles(this.objectsBLayer, 'B');
+    }
+    
+    // 添加一个特殊的标记，帮助在控制台中找到这些日志
+    console.log('=== 特定对象位置记录完成 ===');
+  }
+  
+  // 清除特殊对象标记
+  private clearSpecialTileMarkers(): void {
+    if (this.specialTileMarkers && this.specialTileMarkers.length > 0) {
+      console.log(`GameScene: 清除 ${this.specialTileMarkers.length} 个特殊对象标记`);
+      this.specialTileMarkers.forEach(marker => {
+        if (marker && marker.destroy) {
+          marker.destroy();
+        }
+      });
+      this.specialTileMarkers = [];
+    }
+  }
+  
+  // 记录指定图层中的特定对象
+  private logLayerSpecificTiles(layer: Phaser.Tilemaps.TilemapLayer, layerName: string): void {
+    const width = layer.width;
+    const height = layer.height;
+    let count = 0;
+    
+    // 获取图层的偏移量
+    const layerX = layer.x || 0;
+    const layerY = layer.y || 0;
+    
+    console.log(`GameScene: 检查图层 ${layerName} 中的特定对象，图层位置: (${layerX}, ${layerY}), 尺寸: ${width}x${height}`);
+    
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        const tile = layer.getTileAt(x, y);
+        if (tile) {
+          // 特别关注125、126、127和128
+          if (tile.index === 125 || tile.index === 126 || tile.index === 127 || tile.index === 128) {
+            count++;
+            // 计算瓦片的像素位置
+            const tilePixelX = tile.pixelX + layerX;
+            const tilePixelY = tile.pixelY + layerY;
+            
+            // 打印瓦片的完整属性
+            console.log(`GameScene: 在图层 ${layerName} 位置 (${x}, ${y}) 找到特定对象 ${tile.index}，像素位置: (${tilePixelX}, ${tilePixelY})`);
+            
+            // 确保瓦片设置了碰撞属性
+            tile.setCollision(true);
+            
+            // 不再添加任何标签
+          }
+        }
+      }
+    }
+    
+    console.log(`GameScene: 图层 ${layerName} 中共找到 ${count} 个特定对象`);
+  }
+
+  // 为所有瓦片设置碰撞属性
+  private setAllTilesCollision(layer: Phaser.Tilemaps.TilemapLayer | undefined, layerName: string, priority: string = 'normal'): void {
+    if (!layer) {
+      console.log(`GameScene: 图层 ${layerName} 不存在，跳过碰撞设置`);
+      return;
+    }
+    
+    console.log(`GameScene: 为图层 ${layerName} 设置所有瓦片的碰撞属性 (优先级: ${priority})`);
+    
+    const width = layer.width;
+    const height = layer.height;
+    let collisionCount = 0;
+    let specialTileCount = 0;
+    
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        const tile = layer.getTileAt(x, y);
+        if (tile && tile.index > 0) {
+          tile.setCollision(true);
+          collisionCount++;
+          
+          // 特别关注125-128
+          if (tile.index === 125 || tile.index === 126 || tile.index === 127 || tile.index === 128) {
+            specialTileCount++;
+            console.log(`GameScene: 为图层 ${layerName} 中的特定对象 ${tile.index} 设置碰撞，位置: (${x}, ${y})`);
+          }
+        }
+      }
+    }
+    
+    console.log(`GameScene: 图层 ${layerName} 中共设置了 ${collisionCount} 个瓦片的碰撞属性，其中特殊对象 ${specialTileCount} 个`);
+  }
+
+  // 直接检查玩家是否与任何瓦片重叠
+  private checkDirectOverlap(): void {
+    if (!this.player || !this.map) return;
+    
+    // 获取玩家的位置和边界
+    const playerX = this.player.x;
+    const playerY = this.player.y;
+    const playerBounds = this.player.getBounds();
+    
+    // 打印玩家边界信息，帮助调试（减少日志频率）
+    if (Math.random() < 0.1) { // 只有10%的几率打印，减少日志量
+      console.log(`GameScene: 玩家边界 - 左: ${playerBounds.left}, 上: ${playerBounds.top}, 右: ${playerBounds.right}, 下: ${playerBounds.bottom}, 宽: ${playerBounds.width}, 高: ${playerBounds.height}`);
+    }
+    
+    // 检查所有图层，但优先检查Objects C层
+    const layers = [
+      { layer: this.objectsCLayer, name: 'Objects C', priority: 'high' },
+      { layer: this.obstaclesLayer, name: 'Objects A', priority: 'low' },
+      { layer: this.objectsBLayer, name: 'Objects B', priority: 'low' }
+    ];
+    
+    // 用于跟踪是否已经找到碰撞
+    let collisionFound = false;
+    
+    for (const { layer, name } of layers) {
+      if (!layer || collisionFound) continue; // 如果已经找到碰撞，跳过其他图层
+      
+      // 获取图层的偏移量
+      const layerX = layer.x || 0;
+      const layerY = layer.y || 0;
+      
+      // 将玩家位置转换为相对于图层的位置
+      const relativeX = playerX - layerX;
+      const relativeY = playerY - layerY;
+      
+      // 将相对位置转换为瓦片坐标
+      const tileX = Math.floor(relativeX / this.map.tileWidth);
+      const tileY = Math.floor(relativeY / this.map.tileHeight);
+      
+      // 检查玩家所在的瓦片及周围的瓦片
+      for (let y = tileY - 2; y <= tileY + 2; y++) {
+        for (let x = tileX - 2; x <= tileX + 2; x++) {
+          // 确保坐标在图层范围内
+          if (x >= 0 && x < layer.width && y >= 0 && y < layer.height) {
+            const tile = layer.getTileAt(x, y);
+            if (tile && tile.index > 0) {
+              // 计算瓦片的像素位置
+              const tilePixelX = tile.pixelX + layerX;
+              const tilePixelY = tile.pixelY + layerY;
+              
+              // 计算瓦片的边界
+              const tileBounds = new Phaser.Geom.Rectangle(
+                tilePixelX,
+                tilePixelY,
+                tile.width,
+                tile.height
+              );
+              
+              // 检查是否与玩家重叠
+              const overlaps = Phaser.Geom.Rectangle.Overlaps(playerBounds, tileBounds);
+              
+              // 特别关注125、126、127和128
+              if (tile.index === 125 || tile.index === 126 || tile.index === 127 || tile.index === 128) {
+                if (overlaps) {
+                  collisionFound = true;
+                  console.log(`GameScene: 玩家与特定对象 ${tile.index} 重叠！！！ 位置: (${x}, ${y}), 图层: ${name}`);
+                  this.setDebugText(`重叠特定对象: ${tile.index}`);
+                  
+                  // 添加一个临时的视觉效果，表示碰撞发生，但不要每帧都添加
+                  // 使用静态变量跟踪上次添加效果的时间
+                  const currentTime = this.time.now;
+                  if (!this.lastEffectTime || currentTime - this.lastEffectTime > 1000) {
+                    this.lastEffectTime = currentTime;
+                    
+                    // 使用闪烁文本而不是红色圆圈
+                    const effectText = this.add.text(playerX, playerY - 30, `碰撞: ${tile.index}`, {
+                      fontSize: '14px',
+                      fontStyle: 'bold',
+                      color: '#ffff00',
+                      backgroundColor: 'rgba(0,0,0,0.7)'
+                    });
+                    effectText.setDepth(1002);
+                    effectText.setOrigin(0.5, 0.5);
+                    
+                    // 创建闪烁效果
+                    this.tweens.add({
+                      targets: effectText,
+                      alpha: { from: 1, to: 0 },
+                      duration: 800,
+                      ease: 'Power2',
+                      onComplete: () => {
+                        effectText.destroy();
+                      }
+                    });
+                  }
+                  
+                  // 找到碰撞后立即返回，不再检查其他瓦片
+                  return;
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // 检查和修复手动添加的125、126、127、128对象
+  private fixManuallyAddedTiles(): void {
+    console.log('GameScene: 开始检查和修复手动添加的125、126、127、128对象');
+    
+    if (!this.map) return;
+    
+    // 获取所有图层，但重点关注Objects C层
+    const layers = [
+      { layer: this.objectsCLayer, name: 'Objects C', priority: 'high' },
+      { layer: this.obstaclesLayer, name: 'Objects A', priority: 'low' },
+      { layer: this.objectsBLayer, name: 'Objects B', priority: 'low' }
+    ];
+    
+    for (const { layer, name, priority } of layers) {
+      if (!layer) continue;
+      
+      console.log(`GameScene: 检查图层 ${name} 中的手动添加对象 (优先级: ${priority})`);
+      
+      // 遍历整个图层
+      for (let y = 0; y < layer.height; y++) {
+        for (let x = 0; x < layer.width; x++) {
+          const tile = layer.getTileAt(x, y);
+          
+          // 检查是否是125、126、127或128对象
+          if (tile && (tile.index === 125 || tile.index === 126 || tile.index === 127 || tile.index === 128)) {
+            console.log(`GameScene: 在图层 ${name} 位置 (${x}, ${y}) 找到对象 ${tile.index}`);
+            
+            // 检查碰撞属性
+            if (!tile.collides) {
+              console.log(`GameScene: 对象 ${tile.index} 没有设置碰撞属性，正在修复...`);
+              
+              // 设置碰撞属性
+              tile.setCollision(true);
+              
+              // 验证修复结果
+              console.log(`GameScene: 对象 ${tile.index} 碰撞属性修复后:`, {
+                collides: tile.collides,
+                canCollide: tile.canCollide
+              });
+              
+              // 不再添加任何标记
+            }
+          }
+        }
+      }
+    }
+    
+    console.log('GameScene: 手动添加对象检查和修复完成');
   }
 } 
