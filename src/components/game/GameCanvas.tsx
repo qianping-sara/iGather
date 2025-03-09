@@ -45,6 +45,12 @@ const GameCanvas = ({ className }: GameCanvasProps) => {
               gravity: { y: 0 },
               debug: process.env.NODE_ENV === 'development'
             }
+          },
+          scale: {
+            mode: Phaser.Scale.RESIZE,
+            autoCenter: Phaser.Scale.CENTER_BOTH,
+            width: '100%',
+            height: '100%',
           }
         };
 
@@ -73,8 +79,18 @@ const GameCanvas = ({ className }: GameCanvasProps) => {
 
     initGame();
 
+    // 监听窗口大小变化
+    const handleResize = () => {
+      if (gameRef.current && gameRef.current.scale) {
+        gameRef.current.scale.refresh();
+      }
+    };
+
+    window.addEventListener('resize', handleResize);
+
     // 清理函数
     return () => {
+      window.removeEventListener('resize', handleResize);
       if (gameRef.current) {
         gameRef.current.destroy(true);
         gameRef.current = null;
@@ -92,7 +108,8 @@ const GameCanvas = ({ className }: GameCanvasProps) => {
         backgroundColor: '#333333',
         display: 'flex',
         justifyContent: 'center',
-        alignItems: 'center'
+        alignItems: 'center',
+        overflow: 'hidden'
       }}
     />
   );

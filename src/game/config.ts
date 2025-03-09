@@ -5,22 +5,23 @@ const isDevelopment = typeof window !== 'undefined' &&
 // 导出一个配置对象，但不导入Phaser，避免服务器端渲染问题
 export const gameConfig = {
   type: 'AUTO',  // Phaser.AUTO的字符串表示
-  width: 960,
-  height: 600,
+  width: '100%',
+  height: '100%',
   parent: 'game-container',
   backgroundColor: '#333333',
   pixelArt: true, // 启用像素艺术模式
   scale: {
-    mode: 'RESIZE',
-    autoCenter: 'CENTER_BOTH',
-    width: 960,
-    height: 600,
+    mode: 'RESIZE',  // 会在客户端被替换为Phaser.Scale.RESIZE
+    autoCenter: 'CENTER_BOTH',  // 会在客户端被替换为Phaser.Scale.CENTER_BOTH
+    expandParent: true,
+    width: '100%',
+    height: '100%',
     min: {
       width: 400,
       height: 300
     },
     max: {
-      width: 1600,
+      width: 2000,
       height: 1200
     }
   },
