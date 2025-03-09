@@ -176,14 +176,6 @@ export default function Home() {
           >
             {showDebug ? '隐藏调试' : '显示调试'}
           </button>
-          {showGameArea && (
-            <button 
-              className="px-4 py-2 bg-[#F2617A] text-white rounded-md hover:bg-[#F2617A]/80 transition-colors shadow-md text-sm border border-[#F2617A]/70"
-              onClick={() => window.location.reload()}
-            >
-              重新加载
-            </button>
-          )}
         </div>
       </header>
       
@@ -473,13 +465,21 @@ export default function Home() {
               </div>
             ))}
           </div>
-          <div className="mt-2 border-t border-gray-700 pt-2">
+          <div className="mt-2 border-t border-gray-700 pt-2 flex">
             <button 
               className="px-2 py-1 bg-gray-700 text-white text-xs rounded mr-2 hover:bg-gray-600"
               onClick={() => setDebugLog([])}
             >
               清空日志
             </button>
+            {showGameArea && (
+              <button 
+                className="px-2 py-1 bg-[#634F7D] text-white text-xs rounded hover:bg-[#735F8D]"
+                onClick={() => window.location.reload()}
+              >
+                重新加载
+              </button>
+            )}
           </div>
         </div>
       )}
