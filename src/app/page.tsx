@@ -251,9 +251,6 @@ export default function Home() {
             <div className="w-full max-w-5xl px-4">
               {/* RPG风格的标题 */}
               <div className="text-center mb-8">
-                <h1 className="text-5xl font-bold text-[#634F7D] drop-shadow-[0_0_8px_rgba(99,79,125,0.6)] mb-2">
-                  HAIVEN NPC
-                </h1>
                 <div className="h-1 w-40 bg-gradient-to-r from-[#634F7D] via-[#CC850A] to-[#634F7D] mx-auto"></div>
                 <p className="text-gray-300 mt-4 text-lg">
                   创建你的数字分身，踏上与NPC对话的奇幻旅程
@@ -269,7 +266,7 @@ export default function Home() {
                     <div className="bg-gray-900 bg-opacity-60 rounded-lg border border-gray-700 p-4 shadow-md overflow-hidden relative">
                       <div className="absolute -right-4 -top-4 w-20 h-20 rounded-full bg-[#634F7D]/10"></div>
                       <div className="absolute -left-6 -bottom-6 w-24 h-24 rounded-full bg-[#634F7D]/10"></div>
-                      <h2 className="text-[#634F7D] text-xl font-bold mb-3 flex items-center relative z-10">
+                      <h2 className="text-[#CC850A] text-xl font-bold mb-3 flex items-center relative z-10">
                         <span className="mr-2">👤</span> 玩家信息
                       </h2>
                       <div className="space-y-3 relative z-10">
@@ -290,16 +287,16 @@ export default function Home() {
                     <div className="bg-gray-900 bg-opacity-60 rounded-lg border border-gray-700 p-4 shadow-md overflow-hidden relative">
                       <div className="absolute -right-4 -top-4 w-20 h-20 rounded-full bg-[#634F7D]/10"></div>
                       <div className="absolute -left-6 -bottom-6 w-24 h-24 rounded-full bg-[#634F7D]/10"></div>
-                      <h2 className="text-[#634F7D] text-xl font-bold mb-3 flex items-center relative z-10">
+                      <h2 className="text-[#CC850A] text-xl font-bold mb-3 flex items-center relative z-10">
                         <span className="mr-2">🌍</span> 场景选择
                       </h2>
-                      <div className="bg-gray-800 p-3 rounded-lg cursor-pointer transition hover:bg-gray-700 border-2 border-[#CC850A]">
+                      <div className="bg-gray-800 p-3 rounded-lg cursor-pointer transition hover:bg-gray-700 border-2 border-[#634F7D]">
                         <div className="flex items-center justify-between">
                           <div>
                             <h3 className="font-bold text-white">海盗场景</h3>
                             <p className="text-sm text-gray-400 mt-1">海盗主题冒险场景</p>
                           </div>
-                          <div className="flex-shrink-0 w-12 h-12 bg-[#CC850A]/20 rounded-full flex items-center justify-center border-2 border-[#CC850A]">
+                          <div className="flex-shrink-0 w-12 h-12 bg-[#CC850A]/20 rounded-full flex items-center justify-center border-2 border-[#634F7D]">
                             <span className="text-xl">🏝️</span>
                           </div>
                         </div>
@@ -333,8 +330,8 @@ export default function Home() {
                   {/* 角色选择区 */}
                   <div className="col-span-2 bg-gray-900 bg-opacity-60 rounded-lg border border-gray-700 p-4 shadow-md">
                     <div className="flex justify-between items-center mb-4">
-                      <h2 className="text-[#634F7D] text-xl font-bold flex items-center">
-                        <span className="mr-2">🧙</span> 选择你的角色
+                      <h2 className="text-[#CC850A] text-xl font-bold flex items-center">
+                        <span className="mr-">🧙</span> 选择你的角色
                       </h2>
                       <div className="relative">
                         <input
@@ -355,8 +352,8 @@ export default function Home() {
                           key={avatar.id}
                           className={`bg-gray-800 rounded-lg cursor-pointer transition transform hover:scale-105 ${
                             selectedAvatar === avatar.id 
-                              ? 'ring-2 ring-[#CC850A] shadow-[0_0_8px_rgba(204,133,10,0.6)]' 
-                              : 'border border-gray-700 hover:border-[#CC850A]'
+                              ? 'ring-2 ring-[#634F7D] shadow-[0_0_8px_rgba(204,133,10,0.6)]' 
+                              : 'border border-gray-700 hover:border-[#634F7D]'
                           }`}
                           onClick={() => setSelectedAvatar(avatar.id)}
                         >

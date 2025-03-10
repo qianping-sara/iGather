@@ -24,6 +24,8 @@ export default class GameScene extends Phaser.Scene implements GameSceneData {
   private playerDebugText?: Phaser.GameObjects.Text;
   private lastEffectTime?: number;
   private specialTileMarkers?: Array<Phaser.GameObjects.GameObject>;
+  private activeBubble?: { graphics: Phaser.GameObjects.Graphics, text: Phaser.GameObjects.Text };
+  private lastCollisionTile?: { index: number, x: number, y: number };
   
   constructor() {
     super('GameScene');
@@ -903,35 +905,26 @@ export default class GameScene extends Phaser.Scene implements GameSceneData {
               if (tile.index === 125 || tile.index === 126 || tile.index === 127 || tile.index === 128) {
                 if (overlaps) {
                   collisionFound = true;
-                  console.log(`GameScene: 玩家与特定对象 ${tile.index} 重叠！！！ 位置: (${x}, ${y}), 图层: ${name}`);
-                  this.setDebugText(`重叠特定对象: ${tile.index}`);
                   
-                  // 添加一个临时的视觉效果，表示碰撞发生，但不要每帧都添加
-                  // 使用静态变量跟踪上次添加效果的时间
-                  const currentTime = this.time.now;
-                  if (!this.lastEffectTime || currentTime - this.lastEffectTime > 1000) {
-                    this.lastEffectTime = currentTime;
+                  // 检查这个碰撞是否与上一次相同
+                  const isSameCollision = this.lastCollisionTile && 
+                                         this.lastCollisionTile.index === tile.index &&
+                                         this.lastCollisionTile.x === x &&
+                                         this.lastCollisionTile.y === y;
+                  
+                  // 只有当没有活跃气泡，或者碰撞对象与上次不同时，才创建新气泡
+                  if (!this.activeBubble || !isSameCollision) {
+                    console.log(`GameScene: 玩家与特定对象 ${tile.index} 重叠！！！ 位置: (${x}, ${y}), 图层: ${name}`);
+                    this.setDebugText(`重叠特定对象: ${tile.index}`);
                     
-                    // 使用闪烁文本而不是红色圆圈
-                    const effectText = this.add.text(playerX, playerY - 30, `碰撞: ${tile.index}`, {
-                      fontSize: '14px',
-                      fontStyle: 'bold',
-                      color: '#ffff00',
-                      backgroundColor: 'rgba(0,0,0,0.7)'
-                    });
-                    effectText.setDepth(1002);
-                    effectText.setOrigin(0.5, 0.5);
+                    // 移除现有气泡（如果有）
+                    this.removeBubble();
                     
-                    // 创建闪烁效果
-                    this.tweens.add({
-                      targets: effectText,
-                      alpha: { from: 1, to: 0 },
-                      duration: 800,
-                      ease: 'Power2',
-                      onComplete: () => {
-                        effectText.destroy();
-                      }
-                    });
+                    // 记录当前碰撞对象
+                    this.lastCollisionTile = { index: tile.index, x, y };
+                    
+                    // 创建新气泡
+                    this.createBubble(playerX, playerY, tile.index, x, y);
                   }
                   
                   // 找到碰撞后立即返回，不再检查其他瓦片
@@ -942,6 +935,134 @@ export default class GameScene extends Phaser.Scene implements GameSceneData {
           }
         }
       }
+    }
+    
+    // 如果没有找到任何碰撞，但之前有碰撞对象，则移除气泡
+    if (!collisionFound && this.lastCollisionTile) {
+      this.removeBubble();
+      this.lastCollisionTile = undefined;
+    }
+  }
+  
+  // 创建对话气泡
+  private createBubble(playerX: number, playerY: number, tileIndex: number, tileX: number, tileY: number): void {
+    // 根据特定对象显示不同的欢迎语
+    let message = '';
+    let bgColor = 'rgba(255,255,255,0.9)'; // 默认使用白色背景
+    let textColor = '#000000'; // 默认使用黑色文字
+    
+    switch(tileIndex) {
+      case 125: // 八卦传播者
+        message = "我知道了一个秘密，我告诉你但你别讲出去哈！";
+        bgColor = 'rgba(255,192,203,0.9)'; // 浅粉色背景
+        textColor = '#000000';
+        break;
+      case 126: // 用户画像创建者
+        message = "你好！我是用户画像创建者。需要我帮你分析用户画像吗？";
+        bgColor = 'rgba(173,216,230,0.9)'; // 浅蓝色背景
+        textColor = '#000000';
+        break;
+      case 127: // 创意激发者
+        message = "嗨！我可以用'How might we'方法帮你激发创意！";
+        bgColor = 'rgba(144,238,144,0.9)'; // 浅绿色背景
+        textColor = '#000000';
+        break;
+      case 128: // 需求讨论者
+        message = "你好！我是需求讨论者，我可以帮你分析epic需求。";
+        bgColor = 'rgba(255,218,185,0.9)'; // 浅橙色背景
+        textColor = '#000000';
+        break;
+    }
+    
+    // 创建对话气泡
+    const bubble = this.add.graphics();
+    const bubblePadding = 4; // 进一步减小内边距
+    
+    // 根据对象在地图上的位置调整气泡位置
+    let offsetY = -25; // 默认向上偏移
+    let offsetX = 0;   // 默认无水平偏移
+    
+    // 处理125和126的特殊情况
+    if (tileIndex === 125 || tileIndex === 126) {
+      if (tileY < 4) { // 靠近地图顶部
+        offsetY = 25; // 向下偏移
+      }
+      
+      // 检查是否靠近左右边缘
+      if (tileX < 4) { // 靠近左边缘
+        offsetX = 15; // 向右偏移
+      } else if (tileX > (this.map?.width || 0) - 4) { // 靠近右边缘
+        offsetX = -15; // 向左偏移
+      }
+    }
+    
+    // 创建文本消息
+    const messageText = this.add.text(playerX + offsetX, playerY + offsetY, message, {
+      fontSize: '10px',
+      fontStyle: 'bold',
+      color: textColor,
+      align: 'center',
+      wordWrap: { width: 110 } // 进一步减小文本宽度
+    });
+    messageText.setOrigin(0.5, 0.5);
+    messageText.setDepth(1002);
+    
+    // 画对话气泡
+    const bubbleWidth = messageText.width + bubblePadding * 2;
+    const bubbleHeight = messageText.height + bubblePadding * 2;
+    const bubbleX = playerX + offsetX - bubbleWidth / 2;
+    const bubbleY = playerY + offsetY - bubbleHeight / 2;
+    
+    bubble.fillStyle(Phaser.Display.Color.ValueToColor(bgColor).color, 0.9);
+    bubble.fillRoundedRect(bubbleX, bubbleY, bubbleWidth, bubbleHeight, 4);
+    bubble.lineStyle(1, 0x000000, 0.5);
+    bubble.strokeRoundedRect(bubbleX, bubbleY, bubbleWidth, bubbleHeight, 4);
+    bubble.setDepth(1001);
+    
+    // 添加指向玩家的三角形，根据气泡位置调整三角形方向和位置
+    bubble.fillStyle(Phaser.Display.Color.ValueToColor(bgColor).color, 0.9);
+    
+    // 根据偏移方向确定三角形位置
+    if (offsetY < 0) { // 气泡在角色上方
+      bubble.fillTriangle(
+        playerX + offsetX * 0.3, bubbleY + bubbleHeight, // 三角形尖端靠近玩家
+        playerX + offsetX * 0.3 - 4, bubbleY + bubbleHeight - 4,
+        playerX + offsetX * 0.3 + 4, bubbleY + bubbleHeight - 4
+      );
+      // 三角形边框
+      bubble.lineStyle(1, 0x000000, 0.5);
+      bubble.lineBetween(playerX + offsetX * 0.3 - 4, bubbleY + bubbleHeight - 4, playerX + offsetX * 0.3, bubbleY + bubbleHeight);
+      bubble.lineBetween(playerX + offsetX * 0.3, bubbleY + bubbleHeight, playerX + offsetX * 0.3 + 4, bubbleY + bubbleHeight - 4);
+    } else { // 气泡在角色下方
+      bubble.fillTriangle(
+        playerX + offsetX * 0.3, bubbleY, // 三角形尖端靠近玩家
+        playerX + offsetX * 0.3 - 4, bubbleY + 4,
+        playerX + offsetX * 0.3 + 4, bubbleY + 4
+      );
+      // 三角形边框
+      bubble.lineStyle(1, 0x000000, 0.5);
+      bubble.lineBetween(playerX + offsetX * 0.3 - 4, bubbleY + 4, playerX + offsetX * 0.3, bubbleY);
+      bubble.lineBetween(playerX + offsetX * 0.3, bubbleY, playerX + offsetX * 0.3 + 4, bubbleY + 4);
+    }
+    
+    // 保存活跃气泡引用
+    this.activeBubble = {
+      graphics: bubble,
+      text: messageText
+    };
+    
+    // 3秒后自动移除气泡
+    this.time.delayedCall(3000, () => {
+      this.removeBubble();
+    });
+  }
+  
+  // 移除对话气泡
+  private removeBubble(): void {
+    if (this.activeBubble) {
+      this.activeBubble.graphics.destroy();
+      this.activeBubble.text.destroy();
+      this.activeBubble = undefined;
     }
   }
 
